@@ -70,6 +70,7 @@ label.check{flex-direction:row;align-items:center;gap:10px;grid-column:1 / -1;co
 label.check input{width:18px;height:18px}
 
 .dataTools{grid-column:1 / -1;display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:flex-start;margin-top:2px}
+.dataNote{flex-basis:100%;margin:0;opacity:.85}
 
 .hint{margin-top:10px;color:var(--muted);text-align:center;font-size:13px}
 .stats h2{margin:2px 0 12px 0;font-size:16px}
