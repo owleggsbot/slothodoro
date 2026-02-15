@@ -64,6 +64,8 @@ const el = {
   longBreakMin: $('longBreakMin'),
   sound: $('sound'),
   slowMode: $('slowMode'),
+  notify: $('notify'),
+  keepAwake: $('keepAwake'),
 
   statFocus: $('statFocus'),
   statMinutes: $('statMinutes'),
@@ -88,6 +90,8 @@ const defaultState = {
     longBreakMin: 15,
     sound: true,
     slowMode: false,
+    notify: false,
+    keepAwake: false,
   },
   stats: {
     focusSessions: 0,
@@ -129,6 +133,35 @@ let remainingMs = state.settings.focusMin * 60 * 1000;
 let running = false;
 let endAt = null;
 let raf = null;
+let to = null;
+let wakeLock = null;
+
+function scheduleTick() {
+  if (state.settings.slowMode) {
+    to = setTimeout(tick, 250);
+  } else {
+    raf = requestAnimationFrame(tick);
+  }
+}
+
+async function ensureWakeLock() {
+  if (!state.settings.keepAwake) return;
+  if (!('wakeLock' in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+  } catch {
+    // ignore
+  }
+}
+
+async function releaseWakeLock() {
+  try {
+    await wakeLock?.release?.();
+  } catch {
+    // ignore
+  }
+  wakeLock = null;
+}
 
 function phaseLabel(p) {
   if (p === 'focus') return 'Focus';
@@ -148,7 +181,10 @@ function setPhase(p, { resetClock = true } = {}) {
   running = false;
   endAt = null;
   if (raf) cancelAnimationFrame(raf);
+  if (to) clearTimeout(to);
   raf = null;
+  to = null;
+  releaseWakeLock();
   render();
 }
 
@@ -156,6 +192,7 @@ function start() {
   if (running) return;
   running = true;
   endAt = Date.now() + remainingMs;
+  ensureWakeLock();
   tick();
   render();
 }
@@ -166,7 +203,10 @@ function pause() {
   remainingMs = Math.max(0, endAt - Date.now());
   endAt = null;
   if (raf) cancelAnimationFrame(raf);
+  if (to) clearTimeout(to);
   raf = null;
+  to = null;
+  releaseWakeLock();
   render();
 }
 
@@ -188,7 +228,7 @@ function tick() {
     return;
   }
   render();
-  raf = requestAnimationFrame(tick);
+  scheduleTick();
 }
 
 // -------------------------
@@ -227,6 +267,19 @@ function softChime() {
   }
 }
 
+function maybeNotify(title, body) {
+  if (!state.settings.notify) return;
+  if (!('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+  // don't be annoying if the tab is focused
+  if (!document.hidden) return;
+  try {
+    new Notification(title, { body, icon: './favicon.svg' });
+  } catch {
+    // ignore
+  }
+}
+
 // -------------------------
 // Completion & stats
 // -------------------------
@@ -243,6 +296,7 @@ function onPhaseComplete() {
   softChime();
 
   if (phase === 'focus') {
+    maybeNotify('Slothodoro: Focus finished', 'Break time. Blink slowly. Hydrate.');
     const minutes = clamp(state.settings.focusMin, 1, 180);
     state.stats.focusSessions += 1;
     state.stats.focusMinutes += minutes;
@@ -282,6 +336,7 @@ function onPhaseComplete() {
   }
 
   // Completed a break
+  maybeNotify('Slothodoro: Break finished', 'Back to focus. Slow and steady.');
   saveState();
   setPhase('focus');
   el.hint.textContent = 'Back to focus. Slow and steady.';
@@ -392,7 +447,10 @@ function syncSettingsToUI() {
   el.longBreakMin.value = String(state.settings.longBreakMin);
   el.sound.checked = !!state.settings.sound;
   el.slowMode.checked = !!state.settings.slowMode;
+  el.notify.checked = !!state.settings.notify;
+  el.keepAwake.checked = !!state.settings.keepAwake;
 }
+
 
 function applySettingsFromUI({ resetClockIfIdle = true } = {}) {
   state.settings.focusMin = clamp(Number(el.focusMin.value || 25), 1, 180);
@@ -401,7 +459,11 @@ function applySettingsFromUI({ resetClockIfIdle = true } = {}) {
   state.settings.longBreakMin = clamp(Number(el.longBreakMin.value || 15), 5, 90);
   state.settings.sound = !!el.sound.checked;
   state.settings.slowMode = !!el.slowMode.checked;
+  state.settings.notify = !!el.notify.checked;
+  state.settings.keepAwake = !!el.keepAwake.checked;
   saveState();
+
+  document.documentElement.classList.toggle('slow', state.settings.slowMode);
 
   if (!running && resetClockIfIdle) {
     remainingMs = getPhaseDurationMs(phase);
@@ -457,8 +519,20 @@ for (const btn of document.querySelectorAll('[data-preset]')) {
   });
 }
 
-for (const input of [el.focusMin, el.breakMin, el.longEvery, el.longBreakMin, el.sound, el.slowMode]) {
-  input.addEventListener('change', () => applySettingsFromUI());
+for (const input of [el.focusMin, el.breakMin, el.longEvery, el.longBreakMin, el.sound, el.slowMode, el.notify, el.keepAwake]) {
+  input.addEventListener('change', async () => {
+    if (input === el.notify && input.checked && 'Notification' in window && Notification.permission === 'default') {
+      try {
+        await Notification.requestPermission();
+      } catch {}
+    }
+    applySettingsFromUI();
+    if (running) {
+      // apply wake lock preference immediately
+      if (state.settings.keepAwake) ensureWakeLock();
+      else releaseWakeLock();
+    }
+  });
 }
 
 el.btnClear.addEventListener('click', () => {
@@ -491,5 +565,11 @@ el.btnShare.addEventListener('click', () => {
 })();
 
 syncSettingsToUI();
+document.documentElement.classList.toggle('slow', !!state.settings.slowMode);
 setPhase('focus');
 render();
+
+// Re-acquire wake lock on visibility regain
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && running) ensureWakeLock();
+});
