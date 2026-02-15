@@ -106,11 +106,27 @@
 
     <section class="card stats">
       <h2>Local stats</h2>
-      <div class="statsGrid">
-        <div class="stat"><div class="k">Focus sessions</div><div id="statFocus" class="v">0</div></div>
-        <div class="stat"><div class="k">Minutes focused</div><div id="statMinutes" class="v">0</div></div>
-        <div class="stat"><div class="k">Current streak</div><div id="statStreak" class="v">0</div></div>
+
+      <div class="split">
+        <div>
+          <h3 class="sub">Today</h3>
+          <div class="statsGrid">
+            <div class="stat"><div class="k">Focus sessions</div><div id="statTodaySessions" class="v">0</div></div>
+            <div class="stat"><div class="k">Minutes focused</div><div id="statTodayMinutes" class="v">0</div></div>
+          </div>
+          <ul id="todayList" class="todayList" aria-label="Today's sessions"></ul>
+        </div>
+
+        <div>
+          <h3 class="sub">All time (this device)</h3>
+          <div class="statsGrid">
+            <div class="stat"><div class="k">Focus sessions</div><div id="statFocus" class="v">0</div></div>
+            <div class="stat"><div class="k">Minutes focused</div><div id="statMinutes" class="v">0</div></div>
+            <div class="stat"><div class="k">Current streak</div><div id="statStreak" class="v">0</div></div>
+          </div>
+        </div>
       </div>
+
       <button id="btnClear" class="btn ghost" type="button">Clear local stats</button>
     </section>
 
