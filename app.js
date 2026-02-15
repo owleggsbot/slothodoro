@@ -876,18 +876,37 @@ el.tickVol.addEventListener('input', () => {
   applySettingsFromUI({ resetClockIfIdle: false });
 });
 
-function exportData() {
+async function exportData() {
   try {
     const payload = {
       v: 1,
       exportedAt: new Date().toISOString(),
       state,
     };
+
+    const filename = `slothodoro-backup-${todayKey()}.json`;
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+
+    // iOS Safari is finicky about Blob downloads. Prefer the native share sheet when available.
+    // This also works nicely on iOS Chrome (which is Safari under the hood).
+    if (navigator.share && window.File) {
+      try {
+        const file = new File([blob], filename, { type: 'application/json' });
+        await navigator.share({
+          title: 'Slothodoro backup',
+          files: [file],
+        });
+        el.hint.textContent = 'Backup ready (shared as a file).';
+        return;
+      } catch {
+        // user cancelled, or share unavailable; fall back to download
+      }
+    }
+
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `slothodoro-backup-${todayKey()}.json`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -939,7 +958,13 @@ async function importDataFromFile(file) {
 el.btnExportData?.addEventListener('click', () => exportData());
 
 el.btnImportData?.addEventListener('click', () => {
-  el.importFile?.click?.();
+  // Prefer showPicker() when available (mobile Safari/Chrome can be picky about programmatic clicks).
+  try {
+    if (el.importFile?.showPicker) el.importFile.showPicker();
+    else el.importFile?.click?.();
+  } catch {
+    el.importFile?.click?.();
+  }
 });
 
 el.importFile?.addEventListener('change', async () => {
