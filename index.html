@@ -11,7 +11,9 @@
 
   <title>Slothodoro</title>
   <link rel="stylesheet" href="styles.css" />
-  <link rel="icon" href="assets/sloth.svg" type="image/svg+xml" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#0b0f14" />
 </head>
 <body>
   <main class="wrap">
@@ -29,6 +31,13 @@
     </header>
 
     <section class="card timer">
+      <div class="ring" aria-hidden="true">
+        <svg viewBox="0 0 120 120" width="120" height="120">
+          <circle class="ringTrack" cx="60" cy="60" r="48" />
+          <circle id="ringProg" class="ringProg" cx="60" cy="60" r="48" />
+        </svg>
+      </div>
+
       <div class="time" aria-live="polite">
         <span id="time">25:00</span>
       </div>
@@ -112,5 +121,12 @@
   </dialog>
 
   <script src="app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch(() => {});
+      });
+    }
+  </script>
 </body>
 </html>

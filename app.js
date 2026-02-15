@@ -1,50 +1,99 @@
-/* Slothodoro — no trackers, no accounts, just a calm timer.
-   Everything is client-side + localStorage. */
+/* Slothodoro — calm, sloth-soft Pomodoro timer.
+   Static-only (GitHub Pages). No accounts. Stats are local.
+*/
 
+// -------------------------
+// PWA
+// -------------------------
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+
+// -------------------------
+// Helpers
+// -------------------------
 const $ = (id) => document.getElementById(id);
-
-const els = {
-  time: $("time"),
-  label: $("label"),
-  hint: $("hint"),
-  startPause: $("startPause"),
-  reset: $("reset"),
-  modeFocus: $("modeFocus"),
-  modeBreak: $("modeBreak"),
-  focusMinutes: $("focusMinutes"),
-  breakMinutes: $("breakMinutes"),
-  sound: $("sound"),
-
-  statSessions: $("statSessions"),
-  statMinutes: $("statMinutes"),
-  statStreak: $("statStreak"),
-  clearStats: $("clearStats"),
-
-  exportCard: $("exportCard"),
-  copyLink: $("copyLink"),
-  canvas: $("cardCanvas"),
-  downloadPng: $("downloadPng"),
-
-  help: $("help"),
-  openHelp: $("openHelp"),
-  closeHelp: $("closeHelp"),
+const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+const pad2 = (n) => String(n).padStart(2, '0');
+const todayKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 };
 
-const STORAGE_KEY = "slothodoro:v1";
+function fmtTime(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${pad2(m)}:${pad2(r)}`;
+}
+
+function b64urlEncode(str) {
+  const u8 = new TextEncoder().encode(str);
+  let bin = '';
+  u8.forEach(b => bin += String.fromCharCode(b));
+  return btoa(bin).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+}
+
+function b64urlDecode(b64url) {
+  const b64 = b64url.replaceAll('-', '+').replaceAll('_', '/');
+  const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
+  const bin = atob(b64 + pad);
+  const u8 = Uint8Array.from(bin, c => c.charCodeAt(0));
+  return new TextDecoder().decode(u8);
+}
+
+// -------------------------
+// Elements
+// -------------------------
+const el = {
+  time: $('time'),
+  modeLabel: $('modeLabel'),
+  hint: $('hint'),
+
+  btnStart: $('btnStart'),
+  btnPause: $('btnPause'),
+  btnReset: $('btnReset'),
+
+  focusMin: $('focusMin'),
+  breakMin: $('breakMin'),
+  longEvery: $('longEvery'),
+  longBreakMin: $('longBreakMin'),
+  sound: $('sound'),
+  slowMode: $('slowMode'),
+
+  statFocus: $('statFocus'),
+  statMinutes: $('statMinutes'),
+  statStreak: $('statStreak'),
+  btnClear: $('btnClear'),
+
+  btnShare: $('btnShare'),
+  shareDialog: $('shareDialog'),
+  shareCanvas: $('shareCanvas'),
+};
+
+// -------------------------
+// State
+// -------------------------
+const STORAGE_KEY = 'slothodoro:v1';
 
 const defaultState = {
   settings: {
     focusMin: 25,
     breakMin: 5,
+    longEvery: 4,
+    longBreakMin: 15,
     sound: true,
+    slowMode: false,
   },
   stats: {
     focusSessions: 0,
     focusMinutes: 0,
-    // streak counts focus sessions completed today
     streakDate: null,
     streakCount: 0,
   },
+  cyclesSinceLong: 0,
   lastResult: null,
 };
 
@@ -70,206 +119,229 @@ function saveState() {
 
 let state = loadState();
 
-let mode = "focus"; // 'focus' | 'break'
+// -------------------------
+// Timer engine
+// -------------------------
+let phase = 'focus'; // focus | break | longbreak
 let remainingMs = state.settings.focusMin * 60 * 1000;
 let running = false;
-let tickTimer = null;
 let endAt = null;
+let raf = null;
 
-function fmt(ms) {
-  const total = Math.max(0, Math.round(ms / 1000));
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+function phaseLabel(p) {
+  if (p === 'focus') return 'Focus';
+  if (p === 'break') return 'Break';
+  return 'Long break';
 }
 
-function todayKey() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+function getPhaseDurationMs(p) {
+  if (p === 'focus') return clamp(state.settings.focusMin, 1, 180) * 60 * 1000;
+  if (p === 'break') return clamp(state.settings.breakMin, 1, 60) * 60 * 1000;
+  return clamp(state.settings.longBreakMin, 5, 90) * 60 * 1000;
 }
 
-function setMode(next) {
-  mode = next;
-  const isFocus = mode === "focus";
-  els.modeFocus.setAttribute("aria-selected", String(isFocus));
-  els.modeBreak.setAttribute("aria-selected", String(!isFocus));
-  els.label.textContent = isFocus ? "Focus time" : "Break time";
-
-  if (!running) {
-    const mins = isFocus ? Number(els.focusMinutes.value) : Number(els.breakMinutes.value);
-    remainingMs = mins * 60 * 1000;
-    render();
-  }
-}
-
-function setHint(msg) {
-  els.hint.textContent = msg || "";
-}
-
-function render() {
-  els.time.textContent = fmt(remainingMs);
-  els.startPause.textContent = running ? "Pause" : "Start";
-
-  els.exportCard.disabled = !state.lastResult;
-  els.copyLink.setAttribute("aria-disabled", state.lastResult ? "false" : "true");
-  els.copyLink.style.pointerEvents = state.lastResult ? "auto" : "none";
-
-  els.statSessions.textContent = String(state.stats.focusSessions);
-  els.statMinutes.textContent = String(state.stats.focusMinutes);
-  els.statStreak.textContent = String(state.stats.streakCount);
-
-  renderCardPreview();
-}
-
-function applySettingsFromUI() {
-  const focusMin = clampInt(els.focusMinutes.value, 1, 180);
-  const breakMin = clampInt(els.breakMinutes.value, 1, 60);
-  const sound = !!els.sound.checked;
-
-  state.settings = { focusMin, breakMin, sound };
-  saveState();
-
-  if (!running) {
-    remainingMs = (mode === "focus" ? focusMin : breakMin) * 60 * 1000;
-  }
+function setPhase(p, { resetClock = true } = {}) {
+  phase = p;
+  if (resetClock) remainingMs = getPhaseDurationMs(p);
+  running = false;
+  endAt = null;
+  if (raf) cancelAnimationFrame(raf);
+  raf = null;
   render();
-}
-
-function clampInt(v, lo, hi) {
-  const n = Math.round(Number(v));
-  if (!Number.isFinite(n)) return lo;
-  return Math.max(lo, Math.min(hi, n));
 }
 
 function start() {
   if (running) return;
   running = true;
   endAt = Date.now() + remainingMs;
-  setHint(mode === "focus" ? "Sloth says: one tiny step at a time." : "Break time. Hydrate, stretch, blink." );
-
-  tickTimer = window.setInterval(tick, 250);
+  tick();
   render();
 }
 
 function pause() {
   if (!running) return;
   running = false;
-  window.clearInterval(tickTimer);
-  tickTimer = null;
   remainingMs = Math.max(0, endAt - Date.now());
   endAt = null;
-  setHint("Paused. Your sloth will wait." );
+  if (raf) cancelAnimationFrame(raf);
+  raf = null;
   render();
 }
 
 function reset() {
   pause();
-  remainingMs = (mode === "focus" ? state.settings.focusMin : state.settings.breakMin) * 60 * 1000;
-  setHint("Reset." );
+  remainingMs = getPhaseDurationMs(phase);
   render();
 }
 
 function tick() {
+  if (!running) return;
   remainingMs = Math.max(0, endAt - Date.now());
-  els.time.textContent = fmt(remainingMs);
-
   if (remainingMs <= 0) {
-    complete();
+    running = false;
+    endAt = null;
+    if (raf) cancelAnimationFrame(raf);
+    raf = null;
+    onPhaseComplete();
+    return;
   }
+  render();
+  raf = requestAnimationFrame(tick);
 }
 
-function bell() {
+// -------------------------
+// Sound
+// -------------------------
+function softChime() {
   if (!state.settings.sound) return;
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const o = ctx.createOscillator();
+    const now = ctx.currentTime;
+    const o1 = ctx.createOscillator();
+    const o2 = ctx.createOscillator();
     const g = ctx.createGain();
-    o.type = "sine";
-    o.frequency.value = 880;
-    g.gain.value = 0.0001;
-    o.connect(g);
+
+    o1.type = 'sine';
+    o2.type = 'triangle';
+    o1.frequency.setValueAtTime(523.25, now); // C5
+    o2.frequency.setValueAtTime(659.25, now); // E5
+
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.08, now + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
+
+    o1.connect(g);
+    o2.connect(g);
     g.connect(ctx.destination);
-    o.start();
 
-    // gentle envelope
-    const t = ctx.currentTime;
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.12, t + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
-    o.stop(t + 0.62);
+    o1.start(now);
+    o2.start(now + 0.02);
+    o1.stop(now + 0.9);
+    o2.stop(now + 0.9);
 
-    o.onended = () => ctx.close();
+    setTimeout(() => ctx.close().catch(()=>{}), 1200);
   } catch {
     // ignore
   }
 }
 
-function complete() {
-  pause();
-  bell();
+// -------------------------
+// Completion & stats
+// -------------------------
+function bumpStreak() {
+  const t = todayKey();
+  if (state.stats.streakDate !== t) {
+    state.stats.streakDate = t;
+    state.stats.streakCount = 0;
+  }
+  state.stats.streakCount += 1;
+}
 
-  if (mode === "focus") {
-    const minutes = state.settings.focusMin;
+function onPhaseComplete() {
+  softChime();
 
-    // streak: only counts focus sessions completed today
-    const tk = todayKey();
-    if (state.stats.streakDate !== tk) {
-      state.stats.streakDate = tk;
-      state.stats.streakCount = 0;
-    }
-    state.stats.streakCount += 1;
-
+  if (phase === 'focus') {
+    const minutes = clamp(state.settings.focusMin, 1, 180);
     state.stats.focusSessions += 1;
     state.stats.focusMinutes += minutes;
+    bumpStreak();
 
-    state.lastResult = {
-      kind: "focus",
-      minutes,
-      completedAt: new Date().toISOString(),
-      streakCount: state.stats.streakCount,
-      totalSessions: state.stats.focusSessions,
-      totalMinutes: state.stats.focusMinutes,
+    const result = {
+      at: new Date().toISOString(),
+      focusMin: minutes,
+      breakMin: clamp(state.settings.breakMin, 1, 60),
+      totalFocusSessions: state.stats.focusSessions,
+      streakToday: state.stats.streakCount,
     };
 
-    saveState();
-    setHint(`Nice. You completed ${minutes} minutes of focus. (Streak today: ${state.stats.streakCount})`);
-    setMode("break");
-  } else {
-    setHint("Break complete. Back to focus when you’re ready." );
-    setMode("focus");
-  }
+    state.lastResult = result;
+    try {
+      const encoded = b64urlEncode(JSON.stringify(result));
+      history.replaceState(null, '', `#r=${encoded}`);
+    } catch {}
 
-  updateResultLink();
-  render();
-}
-
-function updateResultLink() {
-  if (!state.lastResult) return;
-  const data = encodeURIComponent(btoa(JSON.stringify(state.lastResult)));
-  const url = `${location.origin}${location.pathname}#r=${data}`;
-  els.copyLink.dataset.url = url;
-}
-
-function tryLoadResultFromHash() {
-  const hash = location.hash || "";
-  const m = hash.match(/#r=([^&]+)/);
-  if (!m) return;
-  try {
-    const obj = JSON.parse(atob(decodeURIComponent(m[1])));
-    if (obj && obj.kind === "focus" && typeof obj.minutes === "number") {
-      state.lastResult = obj;
-      saveState();
+    // Decide next phase
+    const le = Number(state.settings.longEvery || 0);
+    if (le > 0) {
+      state.cyclesSinceLong = (state.cyclesSinceLong || 0) + 1;
+      if (state.cyclesSinceLong >= le) {
+        state.cyclesSinceLong = 0;
+        saveState();
+        setPhase('longbreak');
+        el.hint.textContent = 'Long break time. You earned it.';
+        return;
+      }
     }
-  } catch {
-    // ignore
+
+    saveState();
+    setPhase('break');
+    el.hint.textContent = 'Break time. Blink slowly. Hydrate.';
+    return;
   }
+
+  // Completed a break
+  saveState();
+  setPhase('focus');
+  el.hint.textContent = 'Back to focus. Slow and steady.';
 }
 
-function drawRoundedRect(ctx, x, y, w, h, r) {
-  const rr = Math.min(r, w / 2, h / 2);
+// -------------------------
+// Share card
+// -------------------------
+function drawShareCard() {
+  const c = el.shareCanvas;
+  const ctx = c.getContext('2d');
+  const w = c.width, h = c.height;
+
+  // bg
+  ctx.fillStyle = '#0b0f14';
+  ctx.fillRect(0, 0, w, h);
+
+  // subtle gradient
+  const g = ctx.createLinearGradient(0, 0, w, h);
+  g.addColorStop(0, 'rgba(125, 255, 200, 0.12)');
+  g.addColorStop(1, 'rgba(140, 200, 255, 0.08)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+
+  // card
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  roundRect(ctx, 80, 90, w - 160, h - 180, 28);
+  ctx.fill();
+
+  ctx.fillStyle = '#e9f2ff';
+  ctx.font = '700 72px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+  ctx.fillText('Slothodoro', 140, 210);
+
+  ctx.font = '500 34px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+  ctx.fillStyle = 'rgba(233,242,255,0.85)';
+  ctx.fillText('calm focus, sloth pace', 140, 260);
+
+  const r = state.lastResult;
+  const focusMin = r?.focusMin ?? clamp(state.settings.focusMin, 1, 180);
+  const sessions = state.stats.focusSessions;
+  const streak = (state.stats.streakDate === todayKey()) ? state.stats.streakCount : 0;
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '700 120px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+  ctx.fillText(`${focusMin} min`, 140, 420);
+
+  ctx.fillStyle = 'rgba(233,242,255,0.85)';
+  ctx.font = '600 36px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+  ctx.fillText(`Focus sessions (all time): ${sessions}`, 140, 485);
+  ctx.fillText(`Streak today: ${streak}`, 140, 535);
+
+  // sloth emoji stamp
+  ctx.font = '140px system-ui, -apple-system, Segoe UI, Apple Color Emoji, Noto Color Emoji';
+  ctx.fillText('🦥', w - 280, 450);
+
+  ctx.fillStyle = 'rgba(233,242,255,0.65)';
+  ctx.font = '24px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+  ctx.fillText('No accounts • Local-only stats • owleggsbot.github.io/slothodoro', 140, h - 120);
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  const rr = Math.min(r, w/2, h/2);
   ctx.beginPath();
   ctx.moveTo(x + rr, y);
   ctx.arcTo(x + w, y, x + w, y + h, rr);
@@ -279,184 +351,112 @@ function drawRoundedRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-function renderCardPreview() {
-  const c = els.canvas;
-  const ctx = c.getContext("2d");
-  const W = c.width;
-  const H = c.height;
-
-  // background
-  const grad = ctx.createLinearGradient(0, 0, W, H);
-  grad.addColorStop(0, "#0b0d18");
-  grad.addColorStop(1, "#151a33");
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, H);
-
-  // glow blobs
-  ctx.globalAlpha = 0.22;
-  ctx.fillStyle = "#9ff0d3";
-  ctx.beginPath(); ctx.ellipse(280, 120, 260, 180, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = "#ffd59e";
-  ctx.beginPath(); ctx.ellipse(930, 170, 290, 210, 0.3, 0, Math.PI * 2); ctx.fill();
-  ctx.globalAlpha = 1;
-
-  // card container
-  ctx.fillStyle = "rgba(255,255,255,.06)";
-  ctx.strokeStyle = "rgba(255,255,255,.14)";
-  ctx.lineWidth = 2;
-  drawRoundedRect(ctx, 70, 70, W - 140, H - 140, 32);
-  ctx.fill();
-  ctx.stroke();
-
-  // title
-  ctx.fillStyle = "#f3f4ff";
-  ctx.font = "700 60px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
-  ctx.fillText("Slothodoro", 130, 170);
-
-  // subtitle
-  ctx.fillStyle = "rgba(243,244,255,.78)";
-  ctx.font = "400 28px ui-sans-serif, system-ui";
-  ctx.fillText("slow focus, gentle stats", 130, 218);
-
-  // sloth face (simple)
-  const sx = W - 280;
-  const sy = 135;
-  ctx.save();
-  ctx.translate(sx, sy);
-  ctx.fillStyle = "#bca88b";
-  drawRoundedRect(ctx, -80, -70, 160, 140, 40);
-  ctx.fill();
-  ctx.strokeStyle = "rgba(255,255,255,.18)";
-  ctx.stroke();
-  ctx.fillStyle = "#1b1b1b";
-  ctx.beginPath(); ctx.arc(-32, -10, 11, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc( 32, -10, 11, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,.65)";
-  ctx.beginPath(); ctx.arc(-28, -14, 4, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc( 36, -14, 4, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = "#3a2b20";
-  drawRoundedRect(ctx, -13, 12, 26, 16, 10);
-  ctx.fill();
-  ctx.restore();
-
-  // result text
-  const r = state.lastResult;
-  ctx.fillStyle = "rgba(243,244,255,.88)";
-  ctx.font = "600 44px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace";
-  const main = r ? `${r.minutes} minutes focused` : "Complete a focus session";
-  ctx.fillText(main, 130, 330);
-
-  ctx.fillStyle = "rgba(243,244,255,.70)";
-  ctx.font = "400 26px ui-sans-serif, system-ui";
-  const line2 = r ? `Streak today: ${r.streakCount} • Total sessions: ${r.totalSessions}` : "to unlock an exportable session card";
-  ctx.fillText(line2, 130, 380);
-
-  ctx.fillStyle = "rgba(243,244,255,.55)";
-  ctx.font = "400 22px ui-sans-serif, system-ui";
-  ctx.fillText("owleggsbot.github.io/slothodoro", 130, H - 120);
-
-  // update download link
-  if (r) {
-    const dataUrl = c.toDataURL("image/png");
-    els.downloadPng.href = dataUrl;
-    els.downloadPng.setAttribute("aria-disabled", "false");
-    els.downloadPng.style.pointerEvents = "auto";
-  } else {
-    els.downloadPng.href = "#";
-    els.downloadPng.setAttribute("aria-disabled", "true");
-    els.downloadPng.style.pointerEvents = "none";
-  }
+// -------------------------
+// Render & wiring
+// -------------------------
+function renderStats() {
+  el.statFocus.textContent = String(state.stats.focusSessions);
+  el.statMinutes.textContent = String(state.stats.focusMinutes);
+  const streak = (state.stats.streakDate === todayKey()) ? state.stats.streakCount : 0;
+  el.statStreak.textContent = String(streak);
 }
 
-function exportCard() {
-  if (!state.lastResult) return;
-  // ensure latest render
-  renderCardPreview();
-  const dataUrl = els.canvas.toDataURL("image/png");
-  els.downloadPng.href = dataUrl;
-  els.downloadPng.click();
+function render() {
+  el.time.textContent = fmtTime(remainingMs);
+  el.modeLabel.textContent = phaseLabel(phase);
+
+  el.btnStart.disabled = running;
+  el.btnPause.disabled = !running;
+
+  renderStats();
 }
 
-async function copyResultLink() {
-  if (!state.lastResult) return;
-  updateResultLink();
-  const url = els.copyLink.dataset.url;
-  try {
-    await navigator.clipboard.writeText(url);
-    setHint("Result link copied." );
-  } catch {
-    // fallback
-    prompt("Copy this link:", url);
-  }
+function syncSettingsToUI() {
+  el.focusMin.value = String(state.settings.focusMin);
+  el.breakMin.value = String(state.settings.breakMin);
+  el.longEvery.value = String(state.settings.longEvery);
+  el.longBreakMin.value = String(state.settings.longBreakMin);
+  el.sound.checked = !!state.settings.sound;
+  el.slowMode.checked = !!state.settings.slowMode;
 }
 
-function clearStats() {
-  if (!confirm("Clear Slothodoro stats on this device?")) return;
-  state.stats = structuredClone(defaultState.stats);
-  state.lastResult = null;
+function applySettingsFromUI({ resetClockIfIdle = true } = {}) {
+  state.settings.focusMin = clamp(Number(el.focusMin.value || 25), 1, 180);
+  state.settings.breakMin = clamp(Number(el.breakMin.value || 5), 1, 60);
+  state.settings.longEvery = clamp(Number(el.longEvery.value || 0), 0, 8);
+  state.settings.longBreakMin = clamp(Number(el.longBreakMin.value || 15), 5, 90);
+  state.settings.sound = !!el.sound.checked;
+  state.settings.slowMode = !!el.slowMode.checked;
   saveState();
-  setHint("Stats cleared." );
+
+  if (!running && resetClockIfIdle) {
+    remainingMs = getPhaseDurationMs(phase);
+  }
   render();
 }
 
-function hookEvents() {
-  els.modeFocus.addEventListener("click", () => setMode("focus"));
-  els.modeBreak.addEventListener("click", () => setMode("break"));
+// Event listeners
+el.btnStart.addEventListener('click', () => start());
+el.btnPause.addEventListener('click', () => pause());
+el.btnReset.addEventListener('click', () => reset());
 
-  els.startPause.addEventListener("click", () => (running ? pause() : start()));
-  els.reset.addEventListener("click", reset);
-
-  [els.focusMinutes, els.breakMinutes, els.sound].forEach((el) => {
-    el.addEventListener("change", applySettingsFromUI);
-    el.addEventListener("input", () => {
-      // preview values but avoid spamming localStorage
-      if (el.type === "number" && !running) {
-        const focusMin = clampInt(els.focusMinutes.value, 1, 180);
-        const breakMin = clampInt(els.breakMinutes.value, 1, 60);
-        remainingMs = (mode === "focus" ? focusMin : breakMin) * 60 * 1000;
-        render();
-      }
-    });
-  });
-
-  els.exportCard.addEventListener("click", exportCard);
-  els.copyLink.addEventListener("click", (e) => {
-    e.preventDefault();
-    copyResultLink();
-  });
-  els.clearStats.addEventListener("click", clearStats);
-
-  // help dialog
-  els.openHelp.addEventListener("click", (e) => { e.preventDefault(); els.help.showModal(); });
-  els.closeHelp.addEventListener("click", () => els.help.close());
-
-  // keyboard
-  window.addEventListener("keydown", (e) => {
-    if ((e.key === " " || e.key === "Enter") && (document.activeElement === els.startPause)) {
-      return; // normal
+for (const btn of document.querySelectorAll('[data-preset]')) {
+  btn.addEventListener('click', () => {
+    const preset = btn.getAttribute('data-preset');
+    if (preset === 'classic') {
+      el.focusMin.value = '25';
+      el.breakMin.value = '5';
+      el.longEvery.value = '4';
+      el.longBreakMin.value = '15';
+    } else if (preset === 'deep') {
+      el.focusMin.value = '50';
+      el.breakMin.value = '10';
+      el.longEvery.value = '2';
+      el.longBreakMin.value = '20';
+    } else if (preset === 'gentle') {
+      el.focusMin.value = '15';
+      el.breakMin.value = '5';
+      el.longEvery.value = '0';
+      el.longBreakMin.value = '15';
     }
-    if (e.key === " ") {
-      // space toggles start/pause if focus isn't in an input
-      const tag = (document.activeElement?.tagName || "").toLowerCase();
-      if (tag !== "input" && tag !== "textarea") {
-        e.preventDefault();
-        running ? pause() : start();
-      }
-    }
+    applySettingsFromUI();
+    el.hint.textContent = 'Preset applied.';
   });
 }
 
-function initFromState() {
-  els.focusMinutes.value = String(state.settings.focusMin);
-  els.breakMinutes.value = String(state.settings.breakMin);
-  els.sound.checked = !!state.settings.sound;
-
-  remainingMs = state.settings.focusMin * 60 * 1000;
-  setMode("focus");
-  updateResultLink();
+for (const input of [el.focusMin, el.breakMin, el.longEvery, el.longBreakMin, el.sound, el.slowMode]) {
+  input.addEventListener('change', () => applySettingsFromUI());
 }
 
-tryLoadResultFromHash();
-initFromState();
-hookEvents();
+el.btnClear.addEventListener('click', () => {
+  if (!confirm('Clear local stats and settings on this device?')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  state = loadState();
+  syncSettingsToUI();
+  setPhase('focus');
+  el.hint.textContent = 'Local stats cleared.';
+});
+
+el.btnShare.addEventListener('click', () => {
+  // redraw fresh each open
+  drawShareCard();
+  el.shareDialog.showModal();
+});
+
+// Load share result from URL hash (optional)
+(function initFromHash() {
+  const m = location.hash.match(/#r=([A-Za-z0-9_-]+)/);
+  if (!m) return;
+  try {
+    const parsed = JSON.parse(b64urlDecode(m[1]));
+    if (parsed && typeof parsed === 'object') {
+      state.lastResult = parsed;
+      saveState();
+      el.hint.textContent = 'Loaded your last result from the URL.';
+    }
+  } catch {}
+})();
+
+syncSettingsToUI();
+setPhase('focus');
 render();
