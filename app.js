@@ -93,6 +93,10 @@ const el = {
   keepAwake: $('keepAwake'),
   autoStart: $('autoStart'),
 
+  btnExportData: $('btnExportData'),
+  btnImportData: $('btnImportData'),
+  importFile: $('importFile'),
+
   statTodaySessions: $('statTodaySessions'),
   statTodayMinutes: $('statTodayMinutes'),
   todayList: $('todayList'),
@@ -870,6 +874,79 @@ for (const input of [el.focusMin, el.breakMin, el.longEvery, el.longBreakMin, el
 // Range sliders feel better when they apply while dragging.
 el.tickVol.addEventListener('input', () => {
   applySettingsFromUI({ resetClockIfIdle: false });
+});
+
+function exportData() {
+  try {
+    const payload = {
+      v: 1,
+      exportedAt: new Date().toISOString(),
+      state,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `slothodoro-backup-${todayKey()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2500);
+    el.hint.textContent = 'Exported your local Slothodoro data.';
+  } catch {
+    alert('Export failed.');
+  }
+}
+
+async function importDataFromFile(file) {
+  if (!file) return;
+  let text = '';
+  try {
+    text = await file.text();
+  } catch {
+    alert('Could not read that file.');
+    return;
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    alert('That file is not valid JSON.');
+    return;
+  }
+
+  const incoming = parsed?.state;
+  if (!incoming || typeof incoming !== 'object') {
+    alert('That JSON does not look like a Slothodoro export.');
+    return;
+  }
+
+  if (!confirm('Import will replace your current Slothodoro settings + stats on this device. Continue?')) return;
+
+  try {
+    // Save then reload through loadState() so defaults stay intact.
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(incoming));
+    state = loadState();
+    syncSettingsToUI();
+    setPhase('focus');
+    el.hint.textContent = 'Imported data. Welcome back, slow and steady.';
+  } catch {
+    alert('Import failed.');
+  }
+}
+
+el.btnExportData?.addEventListener('click', () => exportData());
+
+el.btnImportData?.addEventListener('click', () => {
+  el.importFile?.click?.();
+});
+
+el.importFile?.addEventListener('change', async () => {
+  const f = el.importFile.files?.[0];
+  // reset input so you can import the same file twice if needed
+  el.importFile.value = '';
+  await importDataFromFile(f);
 });
 
 el.btnClear.addEventListener('click', () => {

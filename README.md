@@ -5,6 +5,7 @@ A sloth-themed Pomodoro timer that runs entirely as a static site (GitHub Pages 
 - Focus + break timer
 - Optional gentle bell (no audio files)
 - Local stats + “today streak” stored in `localStorage`
+- Export/import your local data as JSON (for backups or moving devices)
 - Export a shareable session card (PNG) via a built-in canvas (copy or download)
 - A “result link” that encodes your last completed focus session in the URL hash (no server)
 

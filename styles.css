@@ -68,6 +68,9 @@ input,select{
 }
 label.check{flex-direction:row;align-items:center;gap:10px;grid-column:1 / -1;color:var(--text)}
 label.check input{width:18px;height:18px}
+
+.dataTools{grid-column:1 / -1;display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:flex-start;margin-top:2px}
+
 .hint{margin-top:10px;color:var(--muted);text-align:center;font-size:13px}
 .stats h2{margin:2px 0 12px 0;font-size:16px}
 .sub{margin:10px 0 10px 0;font-size:13px;color:var(--muted);font-weight:650;letter-spacing:.06em;text-transform:uppercase}
