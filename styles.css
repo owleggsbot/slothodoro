@@ -117,3 +117,10 @@ menu{display:flex;justify-content:flex-end;padding:0;margin:10px 0 0 0}
 /* Sloth Mode: gentler, slightly lazier UI */
 html.slow .ringProg { transition: stroke-dashoffset 400ms ease; }
 html.slow .btn { transition: transform 200ms ease, background 200ms ease, border-color 200ms ease; }
+
+@media (prefers-reduced-motion: reduce){
+  html.slow .ringProg,
+  html.slow .btn{
+    transition: none !important;
+  }
+}
