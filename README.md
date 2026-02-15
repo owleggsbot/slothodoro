@@ -18,7 +18,7 @@ Once GitHub Pages is enabled, it will be here:
 
 Everything is client-side HTML/CSS/JS.
 
-- Timer uses `setInterval` + an `endAt` timestamp for accuracy.
+- Timer uses `requestAnimationFrame` + an `endAt` timestamp for accuracy.
 - Stats are stored in `localStorage` under `slothodoro:v1`.
 - The session card is rendered on a `<canvas>` sized for social sharing (1200×630).
 - The “result link” stores the last result as base64 JSON in `#r=...`.

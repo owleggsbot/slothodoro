@@ -52,6 +52,8 @@ const el = {
   modeLabel: $('modeLabel'),
   hint: $('hint'),
 
+  ringProg: $('ringProg'),
+
   btnStart: $('btnStart'),
   btnPause: $('btnPause'),
   btnReset: $('btnReset'),
@@ -365,6 +367,18 @@ function render() {
   el.time.textContent = fmtTime(remainingMs);
   el.modeLabel.textContent = phaseLabel(phase);
 
+  // Progress ring
+  try {
+    const CIRC = 302; // matches CSS stroke-dasharray
+    const total = getPhaseDurationMs(phase);
+    const pct = total > 0 ? (remainingMs / total) : 0;
+    const off = CIRC * (1 - clamp(pct, 0, 1));
+    if (el.ringProg) el.ringProg.style.strokeDashoffset = String(off);
+  } catch {}
+
+  // Helpful tab title (nice for keeping it in the background)
+  document.title = `${fmtTime(remainingMs)} • ${phaseLabel(phase)} — Slothodoro`;
+
   el.btnStart.disabled = running;
   el.btnPause.disabled = !running;
 
@@ -399,6 +413,25 @@ function applySettingsFromUI({ resetClockIfIdle = true } = {}) {
 el.btnStart.addEventListener('click', () => start());
 el.btnPause.addEventListener('click', () => pause());
 el.btnReset.addEventListener('click', () => reset());
+
+// Keyboard: space = start/pause, r = reset, e = export
+document.addEventListener('keydown', (ev) => {
+  const tag = (ev.target?.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+  if (ev.key === ' ' || ev.code === 'Space') {
+    ev.preventDefault();
+    running ? pause() : start();
+  }
+  if (ev.key?.toLowerCase() === 'r') {
+    ev.preventDefault();
+    reset();
+  }
+  if (ev.key?.toLowerCase() === 'e') {
+    ev.preventDefault();
+    drawShareCard();
+    el.shareDialog.showModal();
+  }
+});
 
 for (const btn of document.querySelectorAll('[data-preset]')) {
   btn.addEventListener('click', () => {
