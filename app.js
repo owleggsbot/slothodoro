@@ -93,6 +93,10 @@ const el = {
   keepAwake: $('keepAwake'),
   autoStart: $('autoStart'),
 
+  btnExportData: $('btnExportData'),
+  btnImportData: $('btnImportData'),
+  importFile: $('importFile'),
+
   statTodaySessions: $('statTodaySessions'),
   statTodayMinutes: $('statTodayMinutes'),
   todayList: $('todayList'),
@@ -107,6 +111,7 @@ const el = {
   shareDialog: $('shareDialog'),
   shareCanvas: $('shareCanvas'),
   btnCopy: $('btnCopy'),
+  btnCopyLink: $('btnCopyLink'),
   btnDownload: $('btnDownload'),
 };
 
@@ -549,6 +554,34 @@ async function downloadShareImage() {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
+async function copyResultLink() {
+  if (!state.lastResult) {
+    alert('No completed focus session yet — finish a focus session first.');
+    return;
+  }
+
+  let url = '';
+  try {
+    const encoded = b64urlEncode(JSON.stringify(state.lastResult));
+    url = `${location.origin}${location.pathname}#r=${encoded}`;
+  } catch {
+    alert('Could not encode result link.');
+    return;
+  }
+
+  // Needs a secure context (https) and user gesture.
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(url);
+      el.hint.textContent = 'Result link copied to clipboard.';
+      return;
+    } catch {}
+  }
+
+  // Fallback for older browsers / permissions.
+  prompt('Copy this result link:', url);
+}
+
 function drawShareCard() {
   const c = el.shareCanvas;
   const ctx = c.getContext('2d');
@@ -843,6 +876,79 @@ el.tickVol.addEventListener('input', () => {
   applySettingsFromUI({ resetClockIfIdle: false });
 });
 
+function exportData() {
+  try {
+    const payload = {
+      v: 1,
+      exportedAt: new Date().toISOString(),
+      state,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `slothodoro-backup-${todayKey()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2500);
+    el.hint.textContent = 'Exported your local Slothodoro data.';
+  } catch {
+    alert('Export failed.');
+  }
+}
+
+async function importDataFromFile(file) {
+  if (!file) return;
+  let text = '';
+  try {
+    text = await file.text();
+  } catch {
+    alert('Could not read that file.');
+    return;
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    alert('That file is not valid JSON.');
+    return;
+  }
+
+  const incoming = parsed?.state;
+  if (!incoming || typeof incoming !== 'object') {
+    alert('That JSON does not look like a Slothodoro export.');
+    return;
+  }
+
+  if (!confirm('Import will replace your current Slothodoro settings + stats on this device. Continue?')) return;
+
+  try {
+    // Save then reload through loadState() so defaults stay intact.
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(incoming));
+    state = loadState();
+    syncSettingsToUI();
+    setPhase('focus');
+    el.hint.textContent = 'Imported data. Welcome back, slow and steady.';
+  } catch {
+    alert('Import failed.');
+  }
+}
+
+el.btnExportData?.addEventListener('click', () => exportData());
+
+el.btnImportData?.addEventListener('click', () => {
+  el.importFile?.click?.();
+});
+
+el.importFile?.addEventListener('change', async () => {
+  const f = el.importFile.files?.[0];
+  // reset input so you can import the same file twice if needed
+  el.importFile.value = '';
+  await importDataFromFile(f);
+});
+
 el.btnClear.addEventListener('click', () => {
   if (!confirm('Clear local stats and settings on this device?')) return;
   localStorage.removeItem(STORAGE_KEY);
@@ -866,6 +972,10 @@ el.btnCopy?.addEventListener('click', async () => {
 el.btnDownload?.addEventListener('click', async () => {
   drawShareCard();
   await downloadShareImage();
+});
+
+el.btnCopyLink?.addEventListener('click', async () => {
+  await copyResultLink();
 });
 
 // Load share result from URL hash (optional)
