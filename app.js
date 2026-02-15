@@ -77,6 +77,7 @@ const el = {
   btnStart: $('btnStart'),
   btnPause: $('btnPause'),
   btnReset: $('btnReset'),
+  btnSkip: $('btnSkip'),
   btnMinus1: $('btnMinus1'),
   btnPlus1: $('btnPlus1'),
 
@@ -90,6 +91,7 @@ const el = {
   slowMode: $('slowMode'),
   notify: $('notify'),
   keepAwake: $('keepAwake'),
+  autoStart: $('autoStart'),
 
   statTodaySessions: $('statTodaySessions'),
   statTodayMinutes: $('statTodayMinutes'),
@@ -122,6 +124,7 @@ const defaultState = {
     slowMode: false,
     notify: false,
     keepAwake: false,
+    autoStart: false,
   },
   stats: {
     focusSessions: 0,
@@ -254,6 +257,16 @@ function reset() {
   remainingMs = getPhaseDurationMs(phase);
   lastWholeSecond = Math.ceil(remainingMs / 1000);
   render();
+}
+
+function skipPhase() {
+  // Skip is intentionally "gentle": it moves to the next phase.
+  // If you skip focus, we do NOT count it toward stats/streak.
+  const wasRunning = running;
+  if (wasRunning) pause();
+  remainingMs = 0;
+  lastWholeSecond = 0;
+  onPhaseComplete({ countFocus: phase !== 'focus' ? true : false });
 }
 
 function nudgeRemainingMinutes(deltaMin) {
@@ -418,10 +431,19 @@ function bumpStreak() {
   state.stats.streakCount += 1;
 }
 
-function onPhaseComplete() {
+function onPhaseComplete({ countFocus = true } = {}) {
   softChime();
 
   if (phase === 'focus') {
+    // If the user skips focus, don't count stats/streak.
+    if (!countFocus) {
+      saveState();
+      setPhase('break');
+      el.hint.textContent = 'Break time. Blink slowly. Hydrate.';
+      if (state.settings.autoStart) start();
+      return;
+    }
+
     maybeNotify('Slothodoro: Focus finished', 'Break time. Blink slowly. Hydrate.');
     const minutes = clamp(state.settings.focusMin, 1, 180);
     state.stats.focusSessions += 1;
@@ -449,29 +471,31 @@ function onPhaseComplete() {
     } catch {}
 
     // Decide next phase
+    let next = 'break';
+    let hint = 'Break time. Blink slowly. Hydrate.';
     const le = Number(state.settings.longEvery || 0);
     if (le > 0) {
       state.cyclesSinceLong = (state.cyclesSinceLong || 0) + 1;
       if (state.cyclesSinceLong >= le) {
         state.cyclesSinceLong = 0;
-        saveState();
-        setPhase('longbreak');
-        el.hint.textContent = 'Long break time. You earned it.';
-        return;
+        next = 'longbreak';
+        hint = 'Long break time. You earned it.';
       }
     }
 
     saveState();
-    setPhase('break');
-    el.hint.textContent = 'Break time. Blink slowly. Hydrate.';
+    setPhase(next);
+    el.hint.textContent = hint;
+    if (state.settings.autoStart) start();
     return;
   }
 
-  // Completed a break
+  // Completed a break (or long break)
   maybeNotify('Slothodoro: Break finished', 'Back to focus. Slow and steady.');
   saveState();
   setPhase('focus');
   el.hint.textContent = 'Back to focus. Slow and steady.';
+  if (state.settings.autoStart) start();
 }
 
 // -------------------------
@@ -614,6 +638,7 @@ function syncSettingsToUI() {
   el.slowMode.checked = !!state.settings.slowMode;
   el.notify.checked = !!state.settings.notify;
   el.keepAwake.checked = !!state.settings.keepAwake;
+  el.autoStart.checked = !!state.settings.autoStart;
 }
 
 
@@ -629,6 +654,7 @@ function applySettingsFromUI({ resetClockIfIdle = true } = {}) {
   state.settings.slowMode = !!el.slowMode.checked;
   state.settings.notify = !!el.notify.checked;
   state.settings.keepAwake = !!el.keepAwake.checked;
+  state.settings.autoStart = !!el.autoStart.checked;
   saveState();
 
   document.documentElement.classList.toggle('slow', state.settings.slowMode);
@@ -643,6 +669,7 @@ function applySettingsFromUI({ resetClockIfIdle = true } = {}) {
 el.btnStart.addEventListener('click', () => start());
 el.btnPause.addEventListener('click', () => pause());
 el.btnReset.addEventListener('click', () => reset());
+el.btnSkip.addEventListener('click', () => skipPhase());
 el.btnMinus1?.addEventListener('click', () => nudgeRemainingMinutes(-1));
 el.btnPlus1?.addEventListener('click', () => nudgeRemainingMinutes(1));
 
@@ -662,6 +689,10 @@ document.addEventListener('keydown', (ev) => {
     ev.preventDefault();
     drawShareCard();
     el.shareDialog.showModal();
+  }
+  if (ev.key?.toLowerCase() === 's') {
+    ev.preventDefault();
+    skipPhase();
   }
 });
 
@@ -689,7 +720,7 @@ for (const btn of document.querySelectorAll('[data-preset]')) {
   });
 }
 
-for (const input of [el.focusMin, el.breakMin, el.longEvery, el.longBreakMin, el.sound, el.tick, el.tickVol, el.slowMode, el.notify, el.keepAwake]) {
+for (const input of [el.focusMin, el.breakMin, el.longEvery, el.longBreakMin, el.sound, el.tick, el.tickVol, el.slowMode, el.notify, el.keepAwake, el.autoStart]) {
   input.addEventListener('change', async () => {
     if (input === el.notify && input.checked && 'Notification' in window && Notification.permission === 'default') {
       try {
