@@ -106,6 +106,8 @@ const el = {
   btnShare: $('btnShare'),
   shareDialog: $('shareDialog'),
   shareCanvas: $('shareCanvas'),
+  btnCopy: $('btnCopy'),
+  btnDownload: $('btnDownload'),
 };
 
 // -------------------------
@@ -502,6 +504,51 @@ function onPhaseComplete({ countFocus = true } = {}) {
 // -------------------------
 // Share card
 // -------------------------
+async function canvasToBlob(canvas) {
+  return await new Promise((resolve) => {
+    try {
+      canvas.toBlob((b) => resolve(b), 'image/png');
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function copyShareImage() {
+  // Needs a secure context (https) and user gesture.
+  if (!navigator.clipboard?.write) {
+    alert('Copy is not supported in this browser. Try “Download PNG” instead.');
+    return;
+  }
+  const blob = await canvasToBlob(el.shareCanvas);
+  if (!blob) {
+    alert('Could not create image blob. Try “Download PNG” instead.');
+    return;
+  }
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    el.hint.textContent = 'Session card copied to clipboard.';
+  } catch {
+    alert('Copy failed (browser permission). Try “Download PNG”.');
+  }
+}
+
+async function downloadShareImage() {
+  const blob = await canvasToBlob(el.shareCanvas);
+  if (!blob) {
+    alert('Could not create image blob.');
+    return;
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `slothodoro-session-${todayKey()}.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
 function drawShareCard() {
   const c = el.shareCanvas;
   const ctx = c.getContext('2d');
@@ -809,6 +856,16 @@ el.btnShare.addEventListener('click', () => {
   // redraw fresh each open
   drawShareCard();
   el.shareDialog.showModal();
+});
+
+el.btnCopy?.addEventListener('click', async () => {
+  drawShareCard();
+  await copyShareImage();
+});
+
+el.btnDownload?.addEventListener('click', async () => {
+  drawShareCard();
+  await downloadShareImage();
 });
 
 // Load share result from URL hash (optional)
