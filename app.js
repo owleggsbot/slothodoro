@@ -102,6 +102,7 @@ const el = {
   statTodayMinutes: $('statTodayMinutes'),
   todayList: $('todayList'),
   todayChart: $('todayChart'),
+  weekChart: $('weekChart'),
 
   statFocus: $('statFocus'),
   statMinutes: $('statMinutes'),
@@ -707,6 +708,66 @@ function renderTodayChart(todays) {
   el.todayChart.innerHTML = parts.join('');
 }
 
+function renderWeekChart(hist) {
+  if (!el.weekChart) return;
+
+  // Last 7 days (local time), oldest → newest.
+  const days = [];
+  const now = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - i);
+    const key = `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+    days.push({
+      key,
+      dow: d.toLocaleDateString(undefined, { weekday: 'short' }),
+      minutes: 0,
+    });
+  }
+
+  const map = new Map(days.map(d => [d.key, d]));
+  for (const h of (Array.isArray(hist) ? hist : [])) {
+    const k = dateKeyFromISO(h.at);
+    if (!k) continue;
+    const bucket = map.get(k);
+    if (!bucket) continue;
+    bucket.minutes += Math.max(0, Number(h.focusMin) || 0);
+  }
+
+  const w = 240;
+  const h = 64;
+  const pad = 8;
+  const labelH = 14;
+  const innerH = h - pad * 2 - labelH;
+
+  const barW = 22;
+  const gap = 10;
+  const maxBarsW = 7 * barW + 6 * gap;
+  const left = Math.floor((w - maxBarsW) / 2);
+
+  const maxVal = Math.max(10, ...days.map(d => d.minutes));
+
+  const parts = [];
+  parts.push(`<rect x="0" y="0" width="${w}" height="${h}" rx="10" ry="10" fill="rgba(255,255,255,0.03)"/>`);
+  parts.push(`<line x1="${pad}" y1="${h - pad - labelH}" x2="${w - pad}" y2="${h - pad - labelH}" stroke="rgba(233,242,255,0.18)" stroke-width="1"/>`);
+
+  for (let i = 0; i < days.length; i++) {
+    const d = days[i];
+    const bh = Math.max(1, Math.round((d.minutes / maxVal) * (innerH - 2)));
+    const x = left + i * (barW + gap);
+    const y = h - pad - labelH - bh;
+    const fill = d.minutes > 0 ? 'rgba(204,255,170,0.65)' : 'rgba(233,242,255,0.10)';
+    const stroke = d.minutes > 0 ? 'rgba(204,255,170,0.22)' : 'rgba(233,242,255,0.10)';
+
+    parts.push(`<rect x="${x}" y="${y}" width="${barW}" height="${bh}" rx="6" ry="6" fill="${fill}" stroke="${stroke}" stroke-width="1"><title>${d.dow}: ${d.minutes} min</title></rect>`);
+
+    const label = (d.dow || '').slice(0, 2);
+    parts.push(`<text x="${x + barW/2}" y="${h - pad}" text-anchor="middle" font-size="11" fill="rgba(233,242,255,0.65)">${label}</text>`);
+  }
+
+  el.weekChart.innerHTML = parts.join('');
+}
+
 function renderToday() {
   const t = todayKey();
   const hist = Array.isArray(state.history) ? state.history : [];
@@ -719,6 +780,7 @@ function renderToday() {
   if (el.statTodayMinutes) el.statTodayMinutes.textContent = String(minutes);
 
   renderTodayChart(todays);
+  renderWeekChart(hist);
 
   if (el.todayList) {
     el.todayList.innerHTML = '';
