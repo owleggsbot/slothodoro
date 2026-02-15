@@ -70,10 +70,17 @@ label.check{flex-direction:row;align-items:center;gap:10px;grid-column:1 / -1;co
 label.check input{width:18px;height:18px}
 .hint{margin-top:10px;color:var(--muted);text-align:center;font-size:13px}
 .stats h2{margin:2px 0 12px 0;font-size:16px}
+.sub{margin:10px 0 10px 0;font-size:13px;color:var(--muted);font-weight:650;letter-spacing:.06em;text-transform:uppercase}
+.split{display:grid;grid-template-columns:1.1fr .9fr;gap:16px;align-items:start}
 .statsGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .stat{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.10);border-radius:14px;padding:12px}
 .k{color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
 .v{font-family:var(--mono);font-size:28px;margin-top:6px}
+.todayList{list-style:none;padding:0;margin:10px 0 0 0;display:flex;flex-direction:column;gap:8px}
+.todayList li{display:flex;justify-content:space-between;gap:10px;align-items:center;
+  background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:10px 12px}
+.todayList .t{font-family:var(--mono);color:rgba(233,242,255,0.92)}
+.todayList .m{color:var(--muted);font-size:13px}
 .foot{margin-top:18px;color:var(--muted);font-size:13px}
 .foot a{color:var(--accent2);text-decoration:none}
 .foot a:hover{text-decoration:underline}
@@ -87,6 +94,7 @@ menu{display:flex;justify-content:flex-end;padding:0;margin:10px 0 0 0}
 @media (max-width:720px){
   .time{font-size:64px}
   .grid{grid-template-columns:1fr}
+  .split{grid-template-columns:1fr}
   .statsGrid{grid-template-columns:1fr}
 }
 

@@ -22,6 +22,26 @@ const todayKey = () => {
   return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 };
 
+const dateKeyFromISO = (iso) => {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return null;
+    return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+  } catch {
+    return null;
+  }
+};
+
+function fmtClock(iso) {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  } catch {
+    return '';
+  }
+}
+
 function fmtTime(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
   const m = Math.floor(s / 60);
@@ -71,6 +91,10 @@ const el = {
   notify: $('notify'),
   keepAwake: $('keepAwake'),
 
+  statTodaySessions: $('statTodaySessions'),
+  statTodayMinutes: $('statTodayMinutes'),
+  todayList: $('todayList'),
+
   statFocus: $('statFocus'),
   statMinutes: $('statMinutes'),
   statStreak: $('statStreak'),
@@ -105,6 +129,9 @@ const defaultState = {
     streakDate: null,
     streakCount: 0,
   },
+  // Local-only history of completed focus sessions.
+  // Each entry: { at: ISOString, focusMin: number }
+  history: [],
   cyclesSinceLong: 0,
   lastResult: null,
 };
@@ -119,6 +146,7 @@ function loadState() {
       ...parsed,
       settings: { ...defaultState.settings, ...(parsed.settings || {}) },
       stats: { ...defaultState.stats, ...(parsed.stats || {}) },
+      history: Array.isArray(parsed.history) ? parsed.history : structuredClone(defaultState.history),
     };
   } catch {
     return structuredClone(defaultState);
@@ -400,6 +428,12 @@ function onPhaseComplete() {
     state.stats.focusMinutes += minutes;
     bumpStreak();
 
+    // Record session in local-only history
+    state.history = Array.isArray(state.history) ? state.history : [];
+    state.history.push({ at: new Date().toISOString(), focusMin: minutes });
+    // keep the history bounded so localStorage doesn't bloat
+    if (state.history.length > 500) state.history = state.history.slice(-500);
+
     const result = {
       at: new Date().toISOString(),
       focusMin: minutes,
@@ -509,7 +543,37 @@ function roundRect(ctx, x, y, w, h, r) {
 // -------------------------
 // Render & wiring
 // -------------------------
+function renderToday() {
+  const t = todayKey();
+  const hist = Array.isArray(state.history) ? state.history : [];
+  const todays = hist.filter(h => dateKeyFromISO(h.at) === t);
+
+  const sessions = todays.length;
+  const minutes = todays.reduce((sum, h) => sum + (Number(h.focusMin) || 0), 0);
+
+  if (el.statTodaySessions) el.statTodaySessions.textContent = String(sessions);
+  if (el.statTodayMinutes) el.statTodayMinutes.textContent = String(minutes);
+
+  if (el.todayList) {
+    el.todayList.innerHTML = '';
+    if (todays.length === 0) {
+      const li = document.createElement('li');
+      li.innerHTML = '<span class="m">No sessions yet today. Slow and steady.</span><span class="t">—</span>';
+      el.todayList.appendChild(li);
+    } else {
+      // newest first
+      for (const h of [...todays].reverse().slice(0, 10)) {
+        const li = document.createElement('li');
+        const mins = Number(h.focusMin) || 0;
+        li.innerHTML = `<span class="m">${mins} min focus</span><span class="t">${fmtClock(h.at)}</span>`;
+        el.todayList.appendChild(li);
+      }
+    }
+  }
+}
+
 function renderStats() {
+  renderToday();
   el.statFocus.textContent = String(state.stats.focusSessions);
   el.statMinutes.textContent = String(state.stats.focusMinutes);
   const streak = (state.stats.streakDate === todayKey()) ? state.stats.streakCount : 0;
