@@ -1,0 +1,89 @@
+:root{
+  --bg:#0b0f14;
+  --card:#111926;
+  --card2:#0f1724;
+  --text:#e8eef6;
+  --muted:#a9b7c7;
+  --accent:#7bd389;
+  --accent2:#6aa7ff;
+  --danger:#ff6b6b;
+  --border:rgba(255,255,255,.10);
+  --shadow: 0 10px 30px rgba(0,0,0,.35);
+  --radius: 18px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background: radial-gradient(1200px 700px at 20% 10%, rgba(123,211,137,.18), transparent 60%),
+              radial-gradient(1200px 700px at 80% 0%, rgba(106,167,255,.18), transparent 55%),
+              var(--bg);
+  color:var(--text);
+  font-family:var(--sans);
+}
+.wrap{max-width:980px;margin:0 auto;padding:28px 18px 50px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px}
+.brand{display:flex;align-items:center;gap:12px}
+.logo{width:46px;height:46px;filter: drop-shadow(0 8px 18px rgba(0,0,0,.35));}
+.tag{margin:2px 0 0 0;color:var(--muted);font-size:13px}
+h1{margin:0;font-size:22px;letter-spacing:.2px}
+.card{background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  box-shadow: var(--shadow);
+  padding:18px;
+  margin:14px 0;
+}
+.timer{padding:22px}
+.time{font-family:var(--mono);font-size:84px;line-height:1;text-align:center;margin:12px 0 8px}
+.mode{text-align:center;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;font-size:12px}
+.controls{display:flex;justify-content:center;gap:10px;margin:16px 0 10px;flex-wrap:wrap}
+.btn{
+  appearance:none;border:1px solid rgba(255,255,255,.14);
+  background:rgba(123,211,137,.20);
+  color:var(--text);
+  padding:10px 14px;border-radius:12px;
+  cursor:pointer;font-weight:650;letter-spacing:.2px;
+}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.secondary{background:rgba(106,167,255,.18)}
+.btn.ghost{background:transparent}
+.btn:hover:not(:disabled){border-color:rgba(255,255,255,.26)}
+.presets{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:10px}
+.pill{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);color:var(--text);
+  padding:8px 12px;border-radius:999px;cursor:pointer;font-size:13px}
+.pill:hover{border-color:rgba(255,255,255,.24)}
+.settings{margin-top:14px}
+.settings summary{cursor:pointer;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+input,select{
+  background:rgba(0,0,0,.25);color:var(--text);
+  border:1px solid rgba(255,255,255,.12);border-radius:12px;
+  padding:10px 12px;font-size:14px
+}
+label.check{flex-direction:row;align-items:center;gap:10px;grid-column:1 / -1;color:var(--text)}
+label.check input{width:18px;height:18px}
+.hint{margin-top:10px;color:var(--muted);text-align:center;font-size:13px}
+.stats h2{margin:2px 0 12px 0;font-size:16px}
+.statsGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.stat{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.10);border-radius:14px;padding:12px}
+.k{color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.v{font-family:var(--mono);font-size:28px;margin-top:6px}
+.foot{margin-top:18px;color:var(--muted);font-size:13px}
+.foot a{color:var(--accent2);text-decoration:none}
+.foot a:hover{text-decoration:underline}
+
+dialog::backdrop{background:rgba(0,0,0,.55)}
+.dialog{min-width:min(820px, 92vw)}
+.dialog canvas{width:100%;height:auto;border-radius:14px;border:1px solid rgba(255,255,255,.12);background:#0b0f14}
+.small{color:var(--muted);font-size:13px;margin-top:0}
+menu{display:flex;justify-content:flex-end;padding:0;margin:10px 0 0 0}
+
+@media (max-width:720px){
+  .time{font-size:64px}
+  .grid{grid-template-columns:1fr}
+  .statsGrid{grid-template-columns:1fr}
+}

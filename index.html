@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Slothodoro — a sloth-soft pomodoro timer for calm focus. No accounts. Just slow, steady progress." />
+  <meta property="og:title" content="Slothodoro" />
+  <meta property="og:description" content="A sloth-soft pomodoro timer for calm focus. Export a shareable session card." />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary" />
+
+  <title>Slothodoro</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="assets/sloth.svg" type="image/svg+xml" />
+</head>
+<body>
+  <main class="wrap">
+    <header class="top">
+      <div class="brand">
+        <img class="logo" src="assets/sloth.svg" alt="Sloth" />
+        <div>
+          <h1>Slothodoro</h1>
+          <p class="tag">calm focus, sloth pace</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btnShare" class="btn secondary" type="button">Export session card</button>
+      </div>
+    </header>
+
+    <section class="card timer">
+      <div class="time" aria-live="polite">
+        <span id="time">25:00</span>
+      </div>
+
+      <div class="mode" id="modeLabel">Focus</div>
+
+      <div class="controls">
+        <button id="btnStart" class="btn" type="button">Start</button>
+        <button id="btnPause" class="btn secondary" type="button" disabled>Pause</button>
+        <button id="btnReset" class="btn ghost" type="button">Reset</button>
+      </div>
+
+      <div class="presets" role="group" aria-label="Presets">
+        <button class="pill" data-preset="classic">Classic 25/5</button>
+        <button class="pill" data-preset="deep">Deep 50/10</button>
+        <button class="pill" data-preset="gentle">Gentle 15/5</button>
+      </div>
+
+      <details class="settings">
+        <summary>Settings</summary>
+        <div class="grid">
+          <label>
+            Focus (min)
+            <input id="focusMin" type="number" min="1" max="180" step="1" value="25" />
+          </label>
+          <label>
+            Break (min)
+            <input id="breakMin" type="number" min="1" max="60" step="1" value="5" />
+          </label>
+          <label>
+            Long break every
+            <select id="longEvery">
+              <option value="0">off</option>
+              <option value="2">2 focus sessions</option>
+              <option value="3">3 focus sessions</option>
+              <option value="4" selected>4 focus sessions</option>
+            </select>
+          </label>
+          <label>
+            Long break (min)
+            <input id="longBreakMin" type="number" min="5" max="90" step="1" value="15" />
+          </label>
+          <label class="check">
+            <input id="sound" type="checkbox" checked />
+            Soft chime on phase change
+          </label>
+          <label class="check">
+            <input id="slowMode" type="checkbox" />
+            “Sloth Mode” (gentler transitions)
+          </label>
+        </div>
+      </details>
+
+      <div class="hint" id="hint">Tip: keep the tab open. Stats are local to this device.</div>
+    </section>
+
+    <section class="card stats">
+      <h2>Local stats</h2>
+      <div class="statsGrid">
+        <div class="stat"><div class="k">Focus sessions</div><div id="statFocus" class="v">0</div></div>
+        <div class="stat"><div class="k">Minutes focused</div><div id="statMinutes" class="v">0</div></div>
+        <div class="stat"><div class="k">Current streak</div><div id="statStreak" class="v">0</div></div>
+      </div>
+      <button id="btnClear" class="btn ghost" type="button">Clear local stats</button>
+    </section>
+
+    <footer class="foot">
+      <p>Made to be slow and steady. Works fully offline-ish (no accounts, no keys). <a href="https://github.com/owleggsbot/slothodoro" target="_blank" rel="noreferrer">Source</a>.</p>
+    </footer>
+  </main>
+
+  <dialog id="shareDialog">
+    <form method="dialog" class="dialog">
+      <h3>Session card</h3>
+      <p class="small">Right-click / long-press to save. Or copy the image.</p>
+      <canvas id="shareCanvas" width="1200" height="630" aria-label="Share card"></canvas>
+      <menu>
+        <button class="btn secondary" value="close">Close</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
