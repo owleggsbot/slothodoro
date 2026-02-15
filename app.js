@@ -86,6 +86,7 @@ const el = {
   longEvery: $('longEvery'),
   longBreakMin: $('longBreakMin'),
   sound: $('sound'),
+  chimeVol: $('chimeVol'),
   tick: $('tick'),
   tickVol: $('tickVol'),
   slowMode: $('slowMode'),
@@ -127,6 +128,7 @@ const defaultState = {
     longEvery: 4,
     longBreakMin: 15,
     sound: true,
+    chimeVol: 67,
     tick: false,
     tickVol: 12,
     slowMode: false,
@@ -337,6 +339,13 @@ function tickVolumeGain() {
   return (v / 100) * 0.12;
 }
 
+function chimeVolumeGain() {
+  // UI is 0–100. Keep it soft: map to 0.0–0.12.
+  // (Old fixed amplitude was ~0.08.)
+  const v = clamp(Number(state.settings.chimeVol ?? 67), 0, 100);
+  return (v / 100) * 0.12;
+}
+
 function ensureTickAudio() {
   if (!state.settings.tick) return;
   try {
@@ -396,7 +405,8 @@ function softChime() {
     o2.frequency.setValueAtTime(659.25, now); // E5
 
     g.gain.setValueAtTime(0.0001, now);
-    g.gain.exponentialRampToValueAtTime(0.08, now + 0.02);
+    const vol = Math.max(0.0001, chimeVolumeGain());
+    g.gain.exponentialRampToValueAtTime(vol, now + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
 
     o1.connect(g);
@@ -764,6 +774,8 @@ function syncSettingsToUI() {
   el.longEvery.value = String(state.settings.longEvery);
   el.longBreakMin.value = String(state.settings.longBreakMin);
   el.sound.checked = !!state.settings.sound;
+  el.chimeVol.value = String(clamp(Number(state.settings.chimeVol ?? 67), 0, 100));
+  el.chimeVol.disabled = !el.sound.checked;
   el.tick.checked = !!state.settings.tick;
   el.tickVol.value = String(clamp(Number(state.settings.tickVol ?? 12), 0, 100));
   el.tickVol.disabled = !el.tick.checked;
@@ -780,6 +792,8 @@ function applySettingsFromUI({ resetClockIfIdle = true } = {}) {
   state.settings.longEvery = clamp(Number(el.longEvery.value || 0), 0, 8);
   state.settings.longBreakMin = clamp(Number(el.longBreakMin.value || 15), 5, 90);
   state.settings.sound = !!el.sound.checked;
+  state.settings.chimeVol = clamp(Number(el.chimeVol.value ?? 67), 0, 100);
+  el.chimeVol.disabled = !state.settings.sound;
   state.settings.tick = !!el.tick.checked;
   state.settings.tickVol = clamp(Number(el.tickVol.value ?? 12), 0, 100);
   el.tickVol.disabled = !state.settings.tick;
@@ -852,7 +866,7 @@ for (const btn of document.querySelectorAll('[data-preset]')) {
   });
 }
 
-for (const input of [el.focusMin, el.breakMin, el.longEvery, el.longBreakMin, el.sound, el.tick, el.tickVol, el.slowMode, el.notify, el.keepAwake, el.autoStart]) {
+for (const input of [el.focusMin, el.breakMin, el.longEvery, el.longBreakMin, el.sound, el.chimeVol, el.tick, el.tickVol, el.slowMode, el.notify, el.keepAwake, el.autoStart]) {
   input.addEventListener('change', async () => {
     if (input === el.notify && input.checked && 'Notification' in window && Notification.permission === 'default') {
       try {
@@ -872,6 +886,10 @@ for (const input of [el.focusMin, el.breakMin, el.longEvery, el.longBreakMin, el
 }
 
 // Range sliders feel better when they apply while dragging.
+el.chimeVol.addEventListener('input', () => {
+  applySettingsFromUI({ resetClockIfIdle: false });
+});
+
 el.tickVol.addEventListener('input', () => {
   applySettingsFromUI({ resetClockIfIdle: false });
 });
