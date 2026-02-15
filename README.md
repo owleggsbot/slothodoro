@@ -46,3 +46,7 @@ npx serve .
 ## License
 
 MIT — see [LICENSE](./LICENSE).
+
+## QA
+
+- [QA Checklist](docs/QA_CHECKLIST.md)
