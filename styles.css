@@ -39,7 +39,9 @@ h1{margin:0;font-size:22px;letter-spacing:.2px}
 .timer{padding:22px}
 .time{font-family:var(--mono);font-size:84px;line-height:1;text-align:center;margin:12px 0 8px}
 .mode{text-align:center;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;font-size:12px}
-.controls{display:flex;justify-content:center;gap:10px;margin:16px 0 10px;flex-wrap:wrap}
+.controls{display:flex;justify-content:center;gap:10px;margin:16px 0 10px;flex-wrap:wrap;align-items:center}
+.nudges{display:flex;gap:8px;align-items:center}
+.btn.tiny{padding:8px 10px;font-size:13px;border-radius:10px}
 .btn{
   appearance:none;border:1px solid rgba(255,255,255,.14);
   background:rgba(123,211,137,.20);
