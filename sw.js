@@ -1,10 +1,11 @@
-const CACHE = 'slothodoro-v2';
+const CACHE = 'slothodoro-v3';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
   './favicon.svg',
+  './og.png',
   './assets/sloth.svg',
   './manifest.webmanifest'
 ];
