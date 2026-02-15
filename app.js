@@ -63,6 +63,8 @@ const el = {
   longEvery: $('longEvery'),
   longBreakMin: $('longBreakMin'),
   sound: $('sound'),
+  tick: $('tick'),
+  tickVol: $('tickVol'),
   slowMode: $('slowMode'),
   notify: $('notify'),
   keepAwake: $('keepAwake'),
@@ -89,6 +91,8 @@ const defaultState = {
     longEvery: 4,
     longBreakMin: 15,
     sound: true,
+    tick: false,
+    tickVol: 12,
     slowMode: false,
     notify: false,
     keepAwake: false,
@@ -135,6 +139,7 @@ let endAt = null;
 let raf = null;
 let to = null;
 let wakeLock = null;
+let lastWholeSecond = null;
 
 function scheduleTick() {
   if (state.settings.slowMode) {
@@ -185,6 +190,7 @@ function setPhase(p, { resetClock = true } = {}) {
   raf = null;
   to = null;
   releaseWakeLock();
+  lastWholeSecond = Math.ceil(remainingMs / 1000);
   render();
 }
 
@@ -192,6 +198,8 @@ function start() {
   if (running) return;
   running = true;
   endAt = Date.now() + remainingMs;
+  lastWholeSecond = Math.ceil(remainingMs / 1000);
+  ensureTickAudio();
   ensureWakeLock();
   tick();
   render();
@@ -207,18 +215,28 @@ function pause() {
   raf = null;
   to = null;
   releaseWakeLock();
+  lastWholeSecond = Math.ceil(remainingMs / 1000);
   render();
 }
 
 function reset() {
   pause();
   remainingMs = getPhaseDurationMs(phase);
+  lastWholeSecond = Math.ceil(remainingMs / 1000);
   render();
 }
 
 function tick() {
   if (!running) return;
   remainingMs = Math.max(0, endAt - Date.now());
+
+  // Tiny focus tick: fire once per whole-second change (not every rAF frame).
+  const wholeSec = Math.ceil(remainingMs / 1000);
+  if (phase === 'focus' && state.settings.tick && wholeSec !== lastWholeSecond && remainingMs > 0) {
+    playTick();
+  }
+  lastWholeSecond = wholeSec;
+
   if (remainingMs <= 0) {
     running = false;
     endAt = null;
@@ -234,6 +252,59 @@ function tick() {
 // -------------------------
 // Sound
 // -------------------------
+let tickCtx = null;
+let tickGain = null;
+
+function tickVolumeGain() {
+  // UI is 0–100. Keep it very quiet: map to 0.0–0.12.
+  const v = clamp(Number(state.settings.tickVol ?? 0), 0, 100);
+  return (v / 100) * 0.12;
+}
+
+function ensureTickAudio() {
+  if (!state.settings.tick) return;
+  try {
+    if (!tickCtx) tickCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (tickCtx.state === 'suspended') tickCtx.resume().catch(() => {});
+    if (!tickGain) {
+      tickGain = tickCtx.createGain();
+      tickGain.gain.setValueAtTime(0.0001, tickCtx.currentTime);
+      tickGain.connect(tickCtx.destination);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function playTick() {
+  if (!state.settings.tick) return;
+  try {
+    ensureTickAudio();
+    if (!tickCtx || !tickGain) return;
+
+    const now = tickCtx.currentTime;
+    const o = tickCtx.createOscillator();
+    const g = tickCtx.createGain();
+
+    // A tiny, soft click. High-ish frequency, super short envelope.
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(1800, now);
+
+    const vol = Math.max(0.0001, tickVolumeGain());
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(vol, now + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.03);
+
+    o.connect(g);
+    g.connect(tickGain);
+
+    o.start(now);
+    o.stop(now + 0.04);
+  } catch {
+    // ignore
+  }
+}
+
 function softChime() {
   if (!state.settings.sound) return;
   try {
@@ -446,6 +517,9 @@ function syncSettingsToUI() {
   el.longEvery.value = String(state.settings.longEvery);
   el.longBreakMin.value = String(state.settings.longBreakMin);
   el.sound.checked = !!state.settings.sound;
+  el.tick.checked = !!state.settings.tick;
+  el.tickVol.value = String(clamp(Number(state.settings.tickVol ?? 12), 0, 100));
+  el.tickVol.disabled = !el.tick.checked;
   el.slowMode.checked = !!state.settings.slowMode;
   el.notify.checked = !!state.settings.notify;
   el.keepAwake.checked = !!state.settings.keepAwake;
@@ -458,6 +532,9 @@ function applySettingsFromUI({ resetClockIfIdle = true } = {}) {
   state.settings.longEvery = clamp(Number(el.longEvery.value || 0), 0, 8);
   state.settings.longBreakMin = clamp(Number(el.longBreakMin.value || 15), 5, 90);
   state.settings.sound = !!el.sound.checked;
+  state.settings.tick = !!el.tick.checked;
+  state.settings.tickVol = clamp(Number(el.tickVol.value ?? 12), 0, 100);
+  el.tickVol.disabled = !state.settings.tick;
   state.settings.slowMode = !!el.slowMode.checked;
   state.settings.notify = !!el.notify.checked;
   state.settings.keepAwake = !!el.keepAwake.checked;
@@ -519,7 +596,7 @@ for (const btn of document.querySelectorAll('[data-preset]')) {
   });
 }
 
-for (const input of [el.focusMin, el.breakMin, el.longEvery, el.longBreakMin, el.sound, el.slowMode, el.notify, el.keepAwake]) {
+for (const input of [el.focusMin, el.breakMin, el.longEvery, el.longBreakMin, el.sound, el.tick, el.tickVol, el.slowMode, el.notify, el.keepAwake]) {
   input.addEventListener('change', async () => {
     if (input === el.notify && input.checked && 'Notification' in window && Notification.permission === 'default') {
       try {
@@ -531,9 +608,17 @@ for (const input of [el.focusMin, el.breakMin, el.longEvery, el.longBreakMin, el
       // apply wake lock preference immediately
       if (state.settings.keepAwake) ensureWakeLock();
       else releaseWakeLock();
+
+      // If tick got enabled mid-session, we may need to create/resume audio.
+      ensureTickAudio();
     }
   });
 }
+
+// Range sliders feel better when they apply while dragging.
+el.tickVol.addEventListener('input', () => {
+  applySettingsFromUI({ resetClockIfIdle: false });
+});
 
 el.btnClear.addEventListener('click', () => {
   if (!confirm('Clear local stats and settings on this device?')) return;
