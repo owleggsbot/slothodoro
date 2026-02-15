@@ -96,6 +96,7 @@ const el = {
   statTodaySessions: $('statTodaySessions'),
   statTodayMinutes: $('statTodayMinutes'),
   todayList: $('todayList'),
+  todayChart: $('todayChart'),
 
   statFocus: $('statFocus'),
   statMinutes: $('statMinutes'),
@@ -567,6 +568,55 @@ function roundRect(ctx, x, y, w, h, r) {
 // -------------------------
 // Render & wiring
 // -------------------------
+function renderTodayChart(todays) {
+  if (!el.todayChart) return;
+
+  // Bucket minutes by hour (local time). Each entry: 0..23
+  const bins = Array.from({ length: 24 }, () => 0);
+  for (const h of todays) {
+    try {
+      const d = new Date(h.at);
+      if (Number.isNaN(d.getTime())) continue;
+      const hour = d.getHours();
+      const mins = Number(h.focusMin) || 0;
+      if (hour >= 0 && hour <= 23) bins[hour] += Math.max(0, mins);
+    } catch {}
+  }
+
+  const w = 240;
+  const h = 44;
+  const pad = 6;
+  const innerH = h - pad * 2;
+  const barW = 8;
+  const gap = 2;
+  const maxBarsW = 24 * barW + 23 * gap;
+  const left = Math.floor((w - maxBarsW) / 2);
+
+  const maxVal = Math.max(10, ...bins); // avoid divide-by-zero + keep subtle scaling
+  const nowHour = new Date().getHours();
+
+  const parts = [];
+  parts.push(`<rect x="0" y="0" width="${w}" height="${h}" rx="8" ry="8" fill="rgba(255,255,255,0.03)"/>`);
+  parts.push(`<line x1="${pad}" y1="${h - pad}" x2="${w - pad}" y2="${h - pad}" stroke="rgba(233,242,255,0.18)" stroke-width="1"/>`);
+
+  // Current hour marker
+  if (nowHour >= 0 && nowHour <= 23) {
+    const x = left + nowHour * (barW + gap) + Math.floor(barW / 2);
+    parts.push(`<line x1="${x}" y1="${pad}" x2="${x}" y2="${h - pad}" stroke="rgba(204,255,170,0.22)" stroke-width="1"/>`);
+  }
+
+  for (let i = 0; i < 24; i++) {
+    const val = bins[i];
+    const bh = Math.max(1, Math.round((val / maxVal) * (innerH - 2)));
+    const x = left + i * (barW + gap);
+    const y = h - pad - bh;
+    const fill = val > 0 ? 'rgba(233,242,255,0.75)' : 'rgba(233,242,255,0.12)';
+    parts.push(`<rect x="${x}" y="${y}" width="${barW}" height="${bh}" rx="2" ry="2" fill="${fill}"/>`);
+  }
+
+  el.todayChart.innerHTML = parts.join('');
+}
+
 function renderToday() {
   const t = todayKey();
   const hist = Array.isArray(state.history) ? state.history : [];
@@ -577,6 +627,8 @@ function renderToday() {
 
   if (el.statTodaySessions) el.statTodaySessions.textContent = String(sessions);
   if (el.statTodayMinutes) el.statTodayMinutes.textContent = String(minutes);
+
+  renderTodayChart(todays);
 
   if (el.todayList) {
     el.todayList.innerHTML = '';

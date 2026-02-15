@@ -76,6 +76,7 @@ label.check input{width:18px;height:18px}
 .stat{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.10);border-radius:14px;padding:12px}
 .k{color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
 .v{font-family:var(--mono);font-size:28px;margin-top:6px}
+.todayChart{display:block;margin:10px 0 0 0;max-width:100%;height:auto}
 .todayList{list-style:none;padding:0;margin:10px 0 0 0;display:flex;flex-direction:column;gap:8px}
 .todayList li{display:flex;justify-content:space-between;gap:10px;align-items:center;
   background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:10px 12px}
