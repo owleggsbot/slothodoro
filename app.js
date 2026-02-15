@@ -107,6 +107,7 @@ const el = {
   shareDialog: $('shareDialog'),
   shareCanvas: $('shareCanvas'),
   btnCopy: $('btnCopy'),
+  btnCopyLink: $('btnCopyLink'),
   btnDownload: $('btnDownload'),
 };
 
@@ -549,6 +550,34 @@ async function downloadShareImage() {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
+async function copyResultLink() {
+  if (!state.lastResult) {
+    alert('No completed focus session yet — finish a focus session first.');
+    return;
+  }
+
+  let url = '';
+  try {
+    const encoded = b64urlEncode(JSON.stringify(state.lastResult));
+    url = `${location.origin}${location.pathname}#r=${encoded}`;
+  } catch {
+    alert('Could not encode result link.');
+    return;
+  }
+
+  // Needs a secure context (https) and user gesture.
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(url);
+      el.hint.textContent = 'Result link copied to clipboard.';
+      return;
+    } catch {}
+  }
+
+  // Fallback for older browsers / permissions.
+  prompt('Copy this result link:', url);
+}
+
 function drawShareCard() {
   const c = el.shareCanvas;
   const ctx = c.getContext('2d');
@@ -866,6 +895,10 @@ el.btnCopy?.addEventListener('click', async () => {
 el.btnDownload?.addEventListener('click', async () => {
   drawShareCard();
   await downloadShareImage();
+});
+
+el.btnCopyLink?.addEventListener('click', async () => {
+  await copyResultLink();
 });
 
 // Load share result from URL hash (optional)
