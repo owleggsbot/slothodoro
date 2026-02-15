@@ -24,6 +24,10 @@ Everything is client-side HTML/CSS/JS.
 - The session card is rendered on a `<canvas>` sized for social sharing (1200×630).
 - The “result link” stores the last result as base64 JSON in `#r=...`.
 
+## QA
+
+- QA checklist: [docs/QA_CHECKLIST.md](./docs/QA_CHECKLIST.md)
+
 ## Develop locally
 
 No build step.
