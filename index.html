@@ -28,6 +28,7 @@
         </div>
       </div>
       <div class="header-actions">
+        <button id="btnHelp" class="btn secondary icon" type="button" aria-label="Help and keyboard shortcuts" title="Help / keyboard shortcuts">?</button>
         <button id="btnShare" class="btn secondary" type="button">Export session card</button>
       </div>
     </header>
@@ -168,6 +169,26 @@
       <p>Made to be slow and steady. Works fully offline-ish (no accounts, no keys). <a href="https://github.com/owleggsbot/slothodoro" target="_blank" rel="noreferrer">Source</a>.</p>
     </footer>
   </main>
+
+
+  <dialog id="helpDialog">
+    <form method="dialog" class="dialog help">
+      <h3>Help</h3>
+      <p class="small">Keyboard shortcuts (when you're not typing in a field):</p>
+
+      <ul class="helpList">
+        <li><kbd>Space</kbd> start / pause</li>
+        <li><kbd>R</kbd> reset</li>
+        <li><kbd>S</kbd> skip to next phase</li>
+        <li><kbd>E</kbd> export session card</li>
+        <li><kbd>?</kbd> open this help</li>
+      </ul>
+
+      <menu>
+        <button class="btn" value="close">Close</button>
+      </menu>
+    </form>
+  </dialog>
 
   <dialog id="shareDialog">
     <form method="dialog" class="dialog">

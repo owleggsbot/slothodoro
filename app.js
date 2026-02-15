@@ -108,6 +108,9 @@ const el = {
   statStreak: $('statStreak'),
   btnClear: $('btnClear'),
 
+  btnHelp: $('btnHelp'),
+  helpDialog: $('helpDialog'),
+
   btnShare: $('btnShare'),
   shareDialog: $('shareDialog'),
   shareCanvas: $('shareCanvas'),
@@ -819,6 +822,10 @@ el.btnSkip.addEventListener('click', () => skipPhase());
 el.btnMinus1?.addEventListener('click', () => nudgeRemainingMinutes(-1));
 el.btnPlus1?.addEventListener('click', () => nudgeRemainingMinutes(1));
 
+el.btnHelp?.addEventListener('click', () => {
+  try { el.helpDialog.showModal(); } catch {}
+});
+
 // Keyboard: space = start/pause, r = reset, e = export
 document.addEventListener('keydown', (ev) => {
   const tag = (ev.target?.tagName || '').toLowerCase();
@@ -839,6 +846,10 @@ document.addEventListener('keydown', (ev) => {
   if (ev.key?.toLowerCase() === 's') {
     ev.preventDefault();
     skipPhase();
+  }
+  if (ev.key === '?') {
+    ev.preventDefault();
+    try { el.helpDialog.showModal(); } catch {}
   }
 });
 
