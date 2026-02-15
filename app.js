@@ -57,6 +57,8 @@ const el = {
   btnStart: $('btnStart'),
   btnPause: $('btnPause'),
   btnReset: $('btnReset'),
+  btnMinus1: $('btnMinus1'),
+  btnPlus1: $('btnPlus1'),
 
   focusMin: $('focusMin'),
   breakMin: $('breakMin'),
@@ -213,6 +215,31 @@ function pause() {
 function reset() {
   pause();
   remainingMs = getPhaseDurationMs(phase);
+  render();
+}
+
+function nudgeRemainingMinutes(deltaMin) {
+  const deltaMs = deltaMin * 60 * 1000;
+
+  // Keep things sane: never below 0, and cap at 6 hours.
+  remainingMs = clamp(remainingMs + deltaMs, 0, 6 * 60 * 60 * 1000);
+
+  if (running && endAt) {
+    endAt = endAt + deltaMs;
+    // If we nudged below zero, complete immediately.
+    if (endAt <= Date.now()) {
+      remainingMs = 0;
+      running = false;
+      endAt = null;
+      if (raf) cancelAnimationFrame(raf);
+      if (to) clearTimeout(to);
+      raf = null;
+      to = null;
+      onPhaseComplete();
+      return;
+    }
+  }
+
   render();
 }
 
@@ -475,6 +502,8 @@ function applySettingsFromUI({ resetClockIfIdle = true } = {}) {
 el.btnStart.addEventListener('click', () => start());
 el.btnPause.addEventListener('click', () => pause());
 el.btnReset.addEventListener('click', () => reset());
+el.btnMinus1?.addEventListener('click', () => nudgeRemainingMinutes(-1));
+el.btnPlus1?.addEventListener('click', () => nudgeRemainingMinutes(1));
 
 // Keyboard: space = start/pause, r = reset, e = export
 document.addEventListener('keydown', (ev) => {
