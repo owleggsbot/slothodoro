@@ -85,6 +85,11 @@ const el = {
   breakMin: $('breakMin'),
   longEvery: $('longEvery'),
   longBreakMin: $('longBreakMin'),
+
+  focusLabel: $('focusLabel'),
+  breakLabel: $('breakLabel'),
+  longBreakLabel: $('longBreakLabel'),
+
   sound: $('sound'),
   chimeVol: $('chimeVol'),
   tick: $('tick'),
@@ -131,6 +136,11 @@ const defaultState = {
     breakMin: 5,
     longEvery: 4,
     longBreakMin: 15,
+
+    focusLabel: 'Focus',
+    breakLabel: 'Break',
+    longBreakLabel: 'Long break',
+
     sound: true,
     chimeVol: 67,
     tick: false,
@@ -215,10 +225,15 @@ async function releaseWakeLock() {
   wakeLock = null;
 }
 
+function cleanLabel(s, fallback) {
+  const v = String(s ?? '').trim();
+  return v ? v.slice(0, 32) : fallback;
+}
+
 function phaseLabel(p) {
-  if (p === 'focus') return 'Focus';
-  if (p === 'break') return 'Break';
-  return 'Long break';
+  if (p === 'focus') return cleanLabel(state.settings.focusLabel, 'Focus');
+  if (p === 'break') return cleanLabel(state.settings.breakLabel, 'Break');
+  return cleanLabel(state.settings.longBreakLabel, 'Long break');
 }
 
 function getPhaseDurationMs(p) {
@@ -466,7 +481,7 @@ function onPhaseComplete({ countFocus = true } = {}) {
       return;
     }
 
-    maybeNotify('Slothodoro: Focus finished', 'Break time. Blink slowly. Hydrate.');
+    maybeNotify(`Slothodoro: ${phaseLabel('focus')} finished`, 'Break time. Blink slowly. Hydrate.');
     const minutes = clamp(state.settings.focusMin, 1, 180);
     state.stats.focusSessions += 1;
     state.stats.focusMinutes += minutes;
@@ -513,7 +528,7 @@ function onPhaseComplete({ countFocus = true } = {}) {
   }
 
   // Completed a break (or long break)
-  maybeNotify('Slothodoro: Break finished', 'Back to focus. Slow and steady.');
+  maybeNotify(`Slothodoro: ${phaseLabel(phase)} finished`, 'Back to focus. Slow and steady.');
   saveState();
   setPhase('focus');
   el.hint.textContent = 'Back to focus. Slow and steady.';
@@ -838,6 +853,10 @@ function syncSettingsToUI() {
   el.breakMin.value = String(state.settings.breakMin);
   el.longEvery.value = String(state.settings.longEvery);
   el.longBreakMin.value = String(state.settings.longBreakMin);
+  if (el.focusLabel) el.focusLabel.value = cleanLabel(state.settings.focusLabel, 'Focus');
+  if (el.breakLabel) el.breakLabel.value = cleanLabel(state.settings.breakLabel, 'Break');
+  if (el.longBreakLabel) el.longBreakLabel.value = cleanLabel(state.settings.longBreakLabel, 'Long break');
+
   el.sound.checked = !!state.settings.sound;
   el.chimeVol.value = String(clamp(Number(state.settings.chimeVol ?? 67), 0, 100));
   el.chimeVol.disabled = !el.sound.checked;
@@ -856,6 +875,11 @@ function applySettingsFromUI({ resetClockIfIdle = true } = {}) {
   state.settings.breakMin = clamp(Number(el.breakMin.value || 5), 1, 60);
   state.settings.longEvery = clamp(Number(el.longEvery.value || 0), 0, 8);
   state.settings.longBreakMin = clamp(Number(el.longBreakMin.value || 15), 5, 90);
+
+  if (el.focusLabel) state.settings.focusLabel = cleanLabel(el.focusLabel.value, 'Focus');
+  if (el.breakLabel) state.settings.breakLabel = cleanLabel(el.breakLabel.value, 'Break');
+  if (el.longBreakLabel) state.settings.longBreakLabel = cleanLabel(el.longBreakLabel.value, 'Long break');
+
   state.settings.sound = !!el.sound.checked;
   state.settings.chimeVol = clamp(Number(el.chimeVol.value ?? 67), 0, 100);
   el.chimeVol.disabled = !state.settings.sound;
@@ -939,7 +963,7 @@ for (const btn of document.querySelectorAll('[data-preset]')) {
   });
 }
 
-for (const input of [el.focusMin, el.breakMin, el.longEvery, el.longBreakMin, el.sound, el.chimeVol, el.tick, el.tickVol, el.slowMode, el.notify, el.keepAwake, el.autoStart]) {
+for (const input of [el.focusMin, el.breakMin, el.longEvery, el.longBreakMin, el.focusLabel, el.breakLabel, el.longBreakLabel, el.sound, el.chimeVol, el.tick, el.tickVol, el.slowMode, el.notify, el.keepAwake, el.autoStart].filter(Boolean)) {
   input.addEventListener('change', async () => {
     if (input === el.notify && input.checked && 'Notification' in window && Notification.permission === 'default') {
       try {
