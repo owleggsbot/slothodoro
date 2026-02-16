@@ -10,6 +10,11 @@ Use this checklist before cutting a release or after any timer/UI/notifications 
   - Desktop: Chrome, Firefox, Safari
   - Mobile: iOS Safari, Android Chrome
 
+## Persistence
+
+- Settings persist after refresh (verify toggles + durations are restored from storage).
+- If you support an explicit “reset settings” action: confirm it clears storage and reloads cleanly.
+
 ## Desktop (Chrome / Firefox / Safari)
 
 ### Core timer controls
@@ -46,6 +51,11 @@ Use this checklist before cutting a release or after any timer/UI/notifications 
 - Start a focus session; let the phone idle.
 - Returning to the app should show an accurate remaining time (timestamp-based catch-up).
 
+### Keep-awake toggle
+
+- Toggle ON should not throw errors in browsers that don’t support wake lock.
+- Toggle OFF returns to normal behavior.
+
 ## Notifications
 
 ### Permission flow
@@ -56,6 +66,10 @@ Use this checklist before cutting a release or after any timer/UI/notifications 
 ### Fires at phase end
 
 - Notification shown when a phase completes (focus and break).
+
+### Focused tab behavior
+
+- If the tab is focused: verify you **don’t** show a system notification (or, if you do by design, confirm it’s intentional and not double-firing).
 
 ## Sound
 
@@ -73,11 +87,33 @@ Use this checklist before cutting a release or after any timer/UI/notifications 
 - Open share UI; card renders (not blank).
 - Copy/save works.
 
+## Export session card
+
+- Open “export/share session” flow (if present).
+- Export card opens and renders (not blank).
+
 ## Offline
 
 - Load once, then airplane mode.
 - If a service worker is present: refresh should still load.
 - If no service worker: note that full offline refresh is not supported, but in-page timer should continue.
+
+## Performance (“Sloth Mode”)
+
+- With “Sloth Mode” enabled:
+  - Timer stays accurate (no drift beyond ~1s/min).
+  - CPU usage is lower (no requestAnimationFrame loop; fewer repaints).
+
+## Accessibility
+
+- Keyboard shortcuts work (start/pause/reset/skip if supported).
+- Focus rings are visible and navigation order is sensible.
+
+## Lighthouse basics
+
+- Run Lighthouse (or equivalent quick audit) and confirm:
+  - No major console errors.
+  - No obvious accessibility regressions.
 
 ## Local stats
 
